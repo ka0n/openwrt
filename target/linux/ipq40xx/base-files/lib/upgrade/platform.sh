@@ -117,6 +117,10 @@ platform_do_upgrade() {
 		[ "$(rootfs_type)" = "tmpfs" ] && mtd erase firmware
 		default_do_upgrade "$1"
 		;;
+	mikrotik,hap-ac3)
+		CI_UBIKERNPART="ubikernel"
+		nand_do_upgrade "$1"
+		;;
 	openmesh,a42 |\
 	openmesh,a62 |\
 	plasmacloud,pa1200 |\
