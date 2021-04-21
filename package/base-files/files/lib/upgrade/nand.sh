@@ -6,6 +6,9 @@
 # 'kernel' partition or UBI volume on NAND contains the kernel
 CI_KERNPART="${CI_KERNPART:-kernel}"
 
+# 'kernel' UBI volume on NAND contains the kernel
+CI_UBIKERNPART="${CI_UBIKERNPART:-ubikernel}"
+
 # 'ubi' partition on NAND contains UBI
 CI_UBIPART="${CI_UBIPART:-ubi}"
 
@@ -211,6 +214,48 @@ nand_upgrade_prepare_ubi() {
 	return 0
 }
 
+nand_upgrade_prepare_kernel_ubi() {
+	local kernel_length="$1"
+
+	[ -n "$kernel_length" ] || return 1
+
+	local mtdnum="$( find_mtd_index "$CI_UBIKERNPART" )"
+	if [ ! "$mtdnum" ]; then
+		echo "cannot find ubi mtd partition $CI_UBIKERNPART"
+		return 1
+	fi
+
+	local ubidev="$( nand_find_ubi "$CI_UBIKERNPART" )"
+	if [ ! "$ubidev" ]; then
+		ubiattach -m "$mtdnum"
+		sync
+		ubidev="$( nand_find_ubi "$CI_UBIKERNPART" )"
+	fi
+
+	if [ ! "$ubidev" ]; then
+		ubiformat /dev/mtd$mtdnum -y
+		ubiattach -m "$mtdnum"
+		sync
+		ubidev="$( nand_find_ubi "$CI_UBIKERNPART" )"
+	fi
+
+	local kern_ubivol="$( nand_find_volume $ubidev $CI_UBIKERNPART )"
+
+	# kill volumes
+	[ "$kern_ubivol" ] && ubirmvol /dev/$ubidev -N $CI_UBIKERNPART || true
+
+	# update kernel
+	if [ -n "$kernel_length" ]; then
+		if ! ubimkvol /dev/$ubidev -N $CI_UBIKERNPART -s $kernel_length; then
+			echo "cannot create kernel volume"
+			return 1;
+		fi
+	fi
+
+	sync
+	return 0
+}
+
 nand_do_upgrade_success() {
 	local conf_tar="/tmp/sysupgrade.tgz"
 
@@ -274,6 +319,7 @@ nand_upgrade_fit() {
 nand_upgrade_tar() {
 	local tar_file="$1"
 	local kernel_mtd="$(find_mtd_index $CI_KERNPART)"
+	local kernel_ubi_mtd="$(find_mtd_index $CI_UBIKERNPART)"
 
 	local board_dir=$(tar tf "$tar_file" | grep -m 1 '^sysupgrade-.*/$')
 	board_dir=${board_dir%/}
@@ -290,18 +336,33 @@ nand_upgrade_tar() {
 	}
 
 	local has_kernel=1
+	local has_ubi_kernel=0
 	local has_env=0
 
 	[ "$kernel_length" != 0 -a -n "$kernel_mtd" ] && {
 		tar xf "$tar_file" ${board_dir}/kernel -O | mtd write - $CI_KERNPART
 	}
 	[ "$kernel_length" = 0 -o ! -z "$kernel_mtd" ] && has_kernel=
+	[ ! -z "$kernel_ubi_mtd" ] && {
+		has_ubi_kernel=1
+		has_kernel=
+	}
 
 	nand_upgrade_prepare_ubi "$rootfs_length" "$rootfs_type" "${has_kernel:+$kernel_length}" "$has_env"
 
+	[ "$has_ubi_kernel" = "1" ] && nand_upgrade_prepare_kernel_ubi "$kernel_length"
+
 	local ubidev="$( nand_find_ubi "$CI_UBIPART" )"
+	[ "$has_ubi_kernel" = "1" ] && local kernel_ubidev="$( nand_find_ubi "$CI_UBIKERNPART" )"
+
 	[ "$has_kernel" = "1" ] && {
 		local kern_ubivol="$( nand_find_volume $ubidev $CI_KERNPART )"
+		tar xf "$tar_file" ${board_dir}/kernel -O | \
+			ubiupdatevol /dev/$kern_ubivol -s $kernel_length -
+	}
+
+	[ "$has_ubi_kernel" = "1" ] && {
+		local kern_ubivol="$( nand_find_volume $kernel_ubidev $CI_UBIKERNPART )"
 		tar xf "$tar_file" ${board_dir}/kernel -O | \
 			ubiupdatevol /dev/$kern_ubivol -s $kernel_length -
 	}
