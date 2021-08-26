@@ -1,4 +1,4 @@
-name: C/C++ CI
+name: AX3600-5.10-restart
 
 on:
   push:
@@ -24,4 +24,5 @@ jobs:
     - name: Upload a Build Artifact
       uses: actions/upload-artifact@v2.2.4
       with:
+        name: AX3600-5.10-restart
         path: 'bin/targets/ipq807x/generic/*'
