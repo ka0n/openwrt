@@ -1,0 +1,27 @@
+name: C/C++ CI
+
+on:
+  push:
+    branches: [ AX3600-5.10-restart ]
+  pull_request:
+    branches: [ AX3600-5.10-restart ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: install dependencies
+      run: sudo apt-get update && sudo apt-get install -y build-essential ccache ecj fastjar file g++ gawk gettext git java-propose-classpath libelf-dev libncurses5-dev libncursesw5-dev libssl-dev python python2.7-dev python3 unzip wget python3-distutils python3-setuptools python3-dev rsync subversion swig time xsltproc zlib1g-dev
+    - name: update feeds
+      run: ./scripts/feeds update -a
+    - name: install feeds
+      run: ./scripts/feeds install -a
+    - name: make 
+      run: make -j $(($(nproc)+1)) defconfig download world
+    - name: Upload a Build Artifact
+      uses: actions/upload-artifact@v2.2.4
+      with:
+        path: 'bin/targets/ipq807x/generic/*'
