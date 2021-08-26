@@ -1,5 +1,7 @@
 ![OpenWrt logo](include/logo.png)
 
+![branch AX3600-5.10-restart](https://github.com/github/docs/actions/workflows/main.yml/badge.svg?branch=AX3600-5.10-restart)
+
 OpenWrt Project is a Linux operating system targeting embedded devices. Instead
 of trying to create a single, static firmware, OpenWrt provides a fully
 writable filesystem with package management. This frees you from the
